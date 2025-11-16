@@ -22,3 +22,10 @@ type ResponseUser struct {
 	GitUrl     string    `json:"git_url"`
 	LikedinUrl string    `json:"likedin_url"`
 }
+
+type UserGoogleResp struct {
+	ID      string `json:"id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
+}

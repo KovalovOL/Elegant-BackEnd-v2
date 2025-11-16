@@ -50,3 +50,23 @@ func (r *Repository) GetByID(ctx context.Context, userID uuid.UUID) (*User, erro
 	}
 	return &user, nil
 }
+
+func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error) {
+	query := `
+	SELECT * FROM users
+	WHERE users.email = $1
+	`
+	var user User
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.GitUrl,
+		&user.LikedinUrl,
+		&user.Bio,
+	);
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
