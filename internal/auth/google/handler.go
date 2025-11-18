@@ -1,4 +1,4 @@
-package auth
+package google
 
 import (
 	"net/http"
@@ -33,13 +33,16 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	code := c.Query("code")
-	resp, err := h.serv.HandleGoogleCallback(ctx, code)
+	ip := c.ClientIP()
+	agent := c.Request.UserAgent()
+	resp, err := h.serv.HandleGoogleCallback(ctx, code, ip, agent)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.SetCookie("access_token", resp.AccessToken, 24*60*60, "/", "", false, true)
-	c.JSON(http.StatusOK, resp.AccessToken)
+	c.JSON(http.StatusOK, resp.User)
 }
 
 func (h *Handler) Me(c *gin.Context) {

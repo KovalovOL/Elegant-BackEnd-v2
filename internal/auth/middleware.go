@@ -8,7 +8,7 @@ import (
 
 func AuthMiddleware(jwtManager *JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie("token")
+		token, err := c.Cookie("access_token")
 		if err != nil || token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return

@@ -1,5 +1,12 @@
 package auth
 
+import (
+	"app/internal/user"
+	"time"
+
+	"github.com/google/uuid"
+)
+
 
 type UserGoogleResp struct {
 	ID      string `json:"id"`
@@ -9,7 +16,24 @@ type UserGoogleResp struct {
 }
 
 type GoogleCallbackResp struct {
-	User *UserGoogleResp `json:"user"`
-	AccessToken string `json:"access_token"`
+	User 		 *user.User `json:"user"`
+	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type CreateRefreshToken struct {
+	UserID 			 uuid.UUID
+	RefreshTokenHash string
+	UserAgent 		 string
+	// IP 				 net.IP
+	IP 				 string
+	ExpireAt 		 time.Time
+	CreatedAt 		 time.Time
+}
+
+type Provider struct {
+	Provider 	   string
+	ProviderUserID string //Id recieved from provider
+	UserID 		   uuid.UUID
+	CreatedAt 	   time.Time
 }

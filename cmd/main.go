@@ -1,9 +1,10 @@
 package main
 
 import (
+	"app/internal/auth"
+	"app/internal/auth/google"
 	"app/internal/db"
 	"app/internal/user"
-	"app/internal/auth"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -12,17 +13,18 @@ import (
 
 func main() {
 	err := godotenv.Load()
-    if err != nil {
-    	log.Printf("Error loading .env file: %v. Proceeding without it.", err)
-    }
+	if err != nil {
+		log.Printf("Error loading .env file: %v. Proceeding without it.", err)
+	}
 
-	conn := db.GetPostgresConnection()
+	conn := db.GetPostgresDB()
+	pool := db.GetPool()
 
 	userRepo := user.NewRepository(conn)
 	userSerc := user.NewService(userRepo)
 	userHandler := user.NewHandler(userSerc)
 
-	googleOAuth, err := auth.NewGoogleOAuth()
+	googleOAuth, err := google.NewGoogleOAuth()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,8 +33,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	authService := auth.NewService(googleOAuth, jwtManager, userRepo)
-	authHandler := auth.NewHandler(authService)
+	authRepo := auth.NewRepository(conn)
+	authService := google.NewService(googleOAuth, jwtManager, userRepo, authRepo, pool)
+	authHandler := google.NewHandler(authService)
 
 	router := gin.Default()
 

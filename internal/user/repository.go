@@ -6,13 +6,20 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type Repository struct {
-	db *pgx.Conn
+type DB interface {
+    Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+    Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+    QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func NewRepository(db *pgx.Conn) *Repository {
+type Repository struct {
+	db DB
+}
+
+func NewRepository(db DB) *Repository {
 	return &Repository{db}
 }
 
