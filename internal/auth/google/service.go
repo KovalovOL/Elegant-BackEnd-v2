@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"net"
 	"time"
-	"unicode/utf8"
-
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
 )
@@ -43,7 +44,12 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip stri
 	if err != nil {
 		return auth.GoogleCallbackResp{}, fmt.Errorf("failed to begin db pool: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+    	if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+        	log.Printf("rollback error: %v", err)
+    	}
+	}()
+
 	txAuthRepo := auth.NewRepository(tx)
 	txUserRepo := user.NewRepository(tx)
 
@@ -81,23 +87,18 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip stri
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-	if !utf8.ValidString(base64.RawURLEncoding.EncodeToString((auth.HashBytes(refreshTokenBytes)))) {
-		fmt.Println("Invalid string hash")
-	}
 
 	refreshToken := auth.CreateRefreshToken{
 		UserID: u.ID,
 		RefreshTokenHash: base64.RawURLEncoding.EncodeToString((auth.HashBytes(refreshTokenBytes))),
 		UserAgent: agent,
-		// IP: net.ParseIP(ip),
-		IP: ip,
+		IP: net.ParseIP(ip),
 		CreatedAt: time.Now(),
 		ExpireAt: time.Now().Add(time.Hour * 24 * 30),
 	}
 
 	_, err = txAuthRepo.CreateRefToken(ctx, refreshToken)
 	if err != nil {
-		fmt.Println("CreateRefToken error")
 		return auth.GoogleCallbackResp{}, err
 	}
 
@@ -109,7 +110,10 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip stri
 	}
 	_, err = txAuthRepo.CreateAuthProvider(ctx, provider)
 	if err != nil {
-		fmt.Println("CreateAuthProvider error")
+		return auth.GoogleCallbackResp{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
 

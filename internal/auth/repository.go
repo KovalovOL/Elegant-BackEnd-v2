@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -21,6 +23,8 @@ func NewRepository(db DB) *Repository {
 }
 
 func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToken) (int, error) {
+	fmt.Println("La la la")
+	
 	query := `
 	INSERT INTO refresh_tokens (user_id, refresh_token_hash, user_agent, ip, expire_at, created_at)
 	VALUES ($1, $2, $3, $4, $5, $6)

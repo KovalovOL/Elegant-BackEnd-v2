@@ -3,7 +3,7 @@ package auth
 import (
 	"app/internal/user"
 	"time"
-
+	"net"
 	"github.com/google/uuid"
 )
 
@@ -25,8 +25,7 @@ type CreateRefreshToken struct {
 	UserID 			 uuid.UUID
 	RefreshTokenHash string
 	UserAgent 		 string
-	// IP 				 net.IP
-	IP 				 string
+	IP 				 net.IP
 	ExpireAt 		 time.Time
 	CreatedAt 		 time.Time
 }
