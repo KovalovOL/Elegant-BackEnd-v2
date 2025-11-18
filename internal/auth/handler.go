@@ -33,13 +33,13 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	code := c.Query("code")
-	u, token, err := h.serv.HandleGoogleCallback(ctx, code)
+	resp, err := h.serv.HandleGoogleCallback(ctx, code)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
 	}
 
-	c.SetCookie("token", token, 24*60*60, "/", "", false, true)
-	c.JSON(http.StatusOK, u)
+	c.SetCookie("access_token", resp.AccessToken, 24*60*60, "/", "", false, true)
+	c.JSON(http.StatusOK, resp.AccessToken)
 }
 
 func (h *Handler) Me(c *gin.Context) {

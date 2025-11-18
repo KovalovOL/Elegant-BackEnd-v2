@@ -40,6 +40,7 @@ func main() {
 	router.POST("/users", userHandler.Create)
 
 	router.GET("/auth/google/login", authHandler.LoginGoogle)
+	router.GET("/auth/logout", authHandler.Logout)
 	router.GET("/auth/google/callback", authHandler.GoogleCallback)
 
 	protected := router.Group("/")

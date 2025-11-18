@@ -16,3 +16,6 @@ migrate-drop:
 
 migrate-version:
 	@migrate -path migrations -database "$(DB_URL)" version
+
+migrate-force:
+	migrate -path migrations -database "$(DB_URL)" force $(v)

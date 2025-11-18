@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"app/internal/user"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,7 +37,7 @@ func (g *GoogleOAuth) ExchangeCode(ctx context.Context, code string) (*oauth2.To
 	return g.config.Exchange(ctx, code)
 }
 
-func (g *GoogleOAuth) GetUserInfo(ctx context.Context, token *oauth2.Token) (*user.UserGoogleResp, error) {
+func (g *GoogleOAuth) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserGoogleResp, error) {
 	client := g.config.Client(ctx, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
@@ -46,7 +45,7 @@ func (g *GoogleOAuth) GetUserInfo(ctx context.Context, token *oauth2.Token) (*us
 	}
 	defer resp.Body.Close()
 
-	var user user.UserGoogleResp
+	var user UserGoogleResp
 	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
 		return nil, err
 	}

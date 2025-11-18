@@ -3,8 +3,6 @@ package auth
 import (
 	"app/internal/user"
 	"context"
-	"fmt"
-
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 )
@@ -26,15 +24,15 @@ func (s *Service) StartGoogleAuth() (state, url string){
 	return state, url
 }
 
-func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (*user.User, string, error) {
+func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (GoogleCallbackResp, error ) {
 	token, err := s.oauth.ExchangeCode(ctx, code)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to exchange code")
+		return GoogleCallbackResp{}, err
 	}
 
 	googleUser, err := s.oauth.GetUserInfo(ctx, token)
 	if err != nil {
-		return nil, "", err
+		return GoogleCallbackResp{}, err
 	}
 
 	u, _ := s.userRepo.GetByEmail(ctx, googleUser.Email)
@@ -47,16 +45,25 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string) (*user.
 			},
 		})
 		if err != nil {
-			return nil, "", err
+		return GoogleCallbackResp{}, err
 		}
 		u, _ = s.userRepo.GetByID(ctx, id)
 	}
 
-	jwtToken, err := s.jwt.Generate(u)
+	accessToken, err := s.jwt.Generate(u)
 	if err != nil {
-		return nil, "", err
+		return GoogleCallbackResp{}, err
 	}
 
-	return u, jwtToken, nil	
+	refreshTokenBytes, err := generateRandomBytes(32)
+	if err != nil {
+		return GoogleCallbackResp{}, err
+	}
+	refreshToken := string(refreshTokenBytes)
+
+	return GoogleCallbackResp{
+		AccessToken: accessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }
 
