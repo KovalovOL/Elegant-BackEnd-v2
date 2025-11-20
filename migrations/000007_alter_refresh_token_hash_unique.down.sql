@@ -1,0 +1,2 @@
+ALTER TABLE refresh_tokens
+DROP CONSTRAINT refresh_token_hash_quinue;

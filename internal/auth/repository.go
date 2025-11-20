@@ -2,8 +2,7 @@ package auth
 
 import (
 	"context"
-	"fmt"
-
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -22,15 +21,37 @@ func NewRepository(db DB) *Repository {
 	return &Repository{db}
 }
 
-func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToken) (int, error) {
-	fmt.Println("La la la")
-	
+func (r *Repository) GetRefToken(ctx context.Context, tokenHash string) (*RefreshToken, error){
+	query := `
+	SELECT * FROM refresh_tokens
+	WHERE refresh_token_hash = $1
+	`
+	var refToken RefreshToken
+	err := r.db.QueryRow(ctx, query, tokenHash).Scan(
+		&refToken.SessionID,
+		&refToken.UserID,
+		&refToken.RefreshTokenHash,
+		&refToken.UserAgent,
+		&refToken.IP,
+		&refToken.ExpireAt,
+		&refToken.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &refToken, nil
+}
+
+func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToken) (uuid.UUID, error) {
 	query := `
 	INSERT INTO refresh_tokens (user_id, refresh_token_hash, user_agent, ip, expire_at, created_at)
 	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT (refresh_token_hash) DO UPDATE
+		SET created_at = NOW(),
+			expire_at = NOW() + INTERVAL '30 days'
 	RETURNING session_id
 	`
-	var id int
+	var id uuid.UUID
 	err := r.db.QueryRow(ctx, query,
 		&token.UserID,
 		&token.RefreshTokenHash,
@@ -40,7 +61,7 @@ func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToke
 		&token.CreatedAt,
 	).Scan(&id)
 	if err != nil {
-		return 0, err
+		return uuid.Nil, err
 	}
 	return id, nil
 }
@@ -61,6 +82,8 @@ func (r *Repository) CreateAuthProvider(ctx context.Context, provider Provider) 
 	query := `
 	INSERT INTO auth_providers (provider, provider_user_id, user_id, created_at)
 	VALUES ($1, $2, $3, $4)
+	ON CONFLICT (provider, provider_user_id) DO UPDATE
+		SET created_at = NOW()
 	RETURNING provider_user_id
 	`
 

@@ -1,0 +1,2 @@
+ALTER TABLE auth_providers
+DROP CONSTRAINT auth_providers_pkey;

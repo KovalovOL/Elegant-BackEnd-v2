@@ -25,23 +25,23 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "state not found"})
 		return
 	}
-
 	if state != c.Query("state") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 		return
 	}
 	ctx := c.Request.Context()
-
+	
 	code := c.Query("code")
 	ip := c.ClientIP()
 	agent := c.Request.UserAgent()
-	resp, err := h.serv.HandleGoogleCallback(ctx, code, ip, agent)
+	refToken, _ := c.Cookie("refresh_token")
+	resp, err := h.serv.HandleGoogleCallback(ctx, refToken, code, ip, agent)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.SetCookie("access_token", resp.AccessToken, 24*60*60, "/", "", false, true)
+	c.SetCookie("access_token", resp.AccessToken, 0.5*60*60, "/", "", false, true)
+	c.SetCookie("refresh_token", resp.RefreshToken, 30*24*60*60, "/", "", false, true)
 	c.JSON(http.StatusOK, resp.User)
 }
 

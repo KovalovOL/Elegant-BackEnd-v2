@@ -35,11 +35,103 @@ func NewService(
 
 func (s *Service) StartGoogleAuth() (state, url string){
 	state = auth.GenerateState()
-	url = s.oauth.config.AuthCodeURL(state, oauth2.SetAuthURLParam("access_type","offline"))
+	url = s.oauth.config.AuthCodeURL(state, oauth2.SetAuthURLParam("access_type", "offline"))
 	return state, url
 }
 
-func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip string, agent string) (auth.GoogleCallbackResp, error ) {
+func (s *Service) getGoogleUser(ctx context.Context, code string) (*auth.UserGoogleResp, error) {
+	token, err := s.oauth.ExchangeCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	googleUser, err := s.oauth.GetUserInfo(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return googleUser, nil
+}
+
+func (s *Service) getAndCreateUser(
+	ctx context.Context, 
+	txUserRepo user.Repository, 
+	googleUser auth.UserGoogleResp,
+) (*user.User, error) {
+
+	u, _ := txUserRepo.GetByEmail(ctx, googleUser.Email)
+	if u == nil {
+		u = &user.User{
+			ID: uuid.New(),
+			CreateUser: user.CreateUser{
+				Email: googleUser.Email,
+				Name: googleUser.Name,
+			},
+		}
+		_, err := txUserRepo.Create(ctx, *u)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return u, nil
+}
+
+func (s *Service) saveRefreshToken(
+	ctx context.Context, 
+	refreshTokenBytes []byte,
+	txAuthRepo auth.Repository, 
+	userID uuid.UUID,
+	googleID string,
+	userAgent string,
+	userIP net.IP,
+) error {
+
+	refreshTokenHash := base64.RawURLEncoding.EncodeToString((auth.HashBytes(refreshTokenBytes)))
+
+	refreshToken := auth.CreateRefreshToken{
+		UserID: userID,
+		RefreshTokenHash: refreshTokenHash,
+		UserAgent: userAgent,
+		IP: userIP,
+		CreatedAt: time.Now().UTC(),
+		ExpireAt: time.Now().UTC().Add(time.Hour * 24 * 30),
+	}
+	_, err := txAuthRepo.CreateRefToken(ctx, refreshToken)
+	if err != nil {
+		return err
+	}
+
+	provider := auth.Provider {
+		Provider: "google",
+		ProviderUserID: googleID,
+		UserID: userID,
+		CreatedAt: time.Now().UTC(),
+	}
+	_, err = txAuthRepo.CreateAuthProvider(ctx, provider)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) isRelogin(ctx context.Context, refTCookieBytes []byte, userID uuid.UUID) bool {
+	refTokenCookieHash := auth.HashBytes(refTCookieBytes)
+	oldRefToken, err := s.authRepo.GetRefToken(ctx, base64.RawURLEncoding.EncodeToString(refTokenCookieHash))
+	if err == nil {
+		if oldRefToken.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) HandleGoogleCallback(
+	ctx context.Context,
+	refTokenCookie string,
+	code string, 
+	ip string, 
+	agent string,
+) (auth.GoogleCallbackResp, error ) {
+
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, fmt.Errorf("failed to begin db pool: %w", err)
@@ -53,62 +145,34 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip stri
 	txAuthRepo := auth.NewRepository(tx)
 	txUserRepo := user.NewRepository(tx)
 
-	token, err := s.oauth.ExchangeCode(ctx, code)
+	googleUser, err := s.getGoogleUser(ctx, code)
+	if err != nil {
+		return auth.GoogleCallbackResp{}, err		
+	}
+
+	u, err := s.getAndCreateUser(ctx, *txUserRepo, *googleUser)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
 
-	googleUser, err := s.oauth.GetUserInfo(ctx, token)
+	accToken, err := s.jwt.Generate(u)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-
-	u, _ := txUserRepo.GetByEmail(ctx, googleUser.Email)
-	if u == nil {
-		id, err := txUserRepo.Create(ctx, user.User{
-			ID: uuid.New(),
-			CreateUser: user.CreateUser{
-				Email: googleUser.Email,
-				Name: googleUser.Name,
-			},
-		})
-		if err != nil {
-		return auth.GoogleCallbackResp{}, err
-		}
-		u, _ = txUserRepo.GetByID(ctx, id)
-	}
-
-	accessToken, err := s.jwt.Generate(u)
+	refTokenBytes, err := auth.GenerateRandomBytes(32)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-
-	refreshTokenBytes, err := auth.GenerateRandomBytes(32)
+	
+	refTokenCookieBytes, err :=  base64.RawURLEncoding.DecodeString(refTokenCookie)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-
-	refreshToken := auth.CreateRefreshToken{
-		UserID: u.ID,
-		RefreshTokenHash: base64.RawURLEncoding.EncodeToString((auth.HashBytes(refreshTokenBytes))),
-		UserAgent: agent,
-		IP: net.ParseIP(ip),
-		CreatedAt: time.Now(),
-		ExpireAt: time.Now().Add(time.Hour * 24 * 30),
+	if s.isRelogin(ctx, refTokenCookieBytes, u.ID) {
+		refTokenBytes = refTokenCookieBytes
 	}
 
-	_, err = txAuthRepo.CreateRefToken(ctx, refreshToken)
-	if err != nil {
-		return auth.GoogleCallbackResp{}, err
-	}
-
-	provider := auth.Provider {
-		Provider: "google",
-		ProviderUserID: googleUser.ID,
-		UserID: u.ID,
-		CreatedAt: time.Now(),
-	}
-	_, err = txAuthRepo.CreateAuthProvider(ctx, provider)
+	err = s.saveRefreshToken(ctx, refTokenBytes, *txAuthRepo, u.ID, googleUser.ID, agent, net.ParseIP(ip))
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
@@ -116,17 +180,9 @@ func (s *Service) HandleGoogleCallback(ctx context.Context, code string, ip stri
 	if err := tx.Commit(ctx); err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-
 	return auth.GoogleCallbackResp{
-		User: &user.User{
-			CreateUser: user.CreateUser{
-				Name: u.Name,
-				Email: u.Email,
-			},
-			ID: u.ID,
-		},
-		AccessToken: accessToken,
-		RefreshToken: string(refreshTokenBytes),
+		User: u,
+		AccessToken: accToken,
+		RefreshToken: base64.RawURLEncoding.EncodeToString(refTokenBytes),
 	}, nil
 }
-

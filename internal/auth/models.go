@@ -17,8 +17,8 @@ type UserGoogleResp struct {
 
 type GoogleCallbackResp struct {
 	User 		 *user.User `json:"user"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken  string 	`json:"access_token"`
+	RefreshToken string 	`json:"refresh_token"`
 }
 
 type CreateRefreshToken struct {
@@ -28,6 +28,11 @@ type CreateRefreshToken struct {
 	IP 				 net.IP
 	ExpireAt 		 time.Time
 	CreatedAt 		 time.Time
+}
+
+type RefreshToken struct{
+	CreateRefreshToken
+	SessionID uuid.UUID
 }
 
 type Provider struct {

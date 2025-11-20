@@ -1,0 +1,2 @@
+ALTER TABLE refresh_tokens
+ADD CONSTRAINT refresh_token_hash_quinue UNIQUE(refresh_token_hash);
