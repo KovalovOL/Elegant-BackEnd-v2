@@ -44,7 +44,7 @@ func (r *Repository) GetRefToken(ctx context.Context, tokenHash string) (*Refres
 
 func (r *Repository) RefreshTokenTime(ctx context.Context, tokenHash string) error {
 	query := `
-	UPDATE auth_providers
+	UPDATE refresh_tokens
 	SET created_at = NOW(),
 		expire_at = NOW() + INTERVAL '30 days' 
 	WHERE refresh_token_hash = $1

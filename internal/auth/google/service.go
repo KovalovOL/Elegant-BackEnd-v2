@@ -190,17 +190,14 @@ func (s *Service) HandleGoogleCallback(
 func (s *Service) Refresh(ctx context.Context, refToken string) (string, error) {
 	refTokenBytes, err :=  base64.RawURLEncoding.DecodeString(refToken)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode refresh token: %w", err)
 	}
 
 	refTokenHash := auth.HashBytes(refTokenBytes)
 	refTokenHashStr := base64.RawURLEncoding.EncodeToString(refTokenHash)
 	t, err := s.authRepo.GetRefToken(ctx, refTokenHashStr)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("invalid refresh token: %w", err)
-		}
-		return "", err
+		return "", fmt.Errorf("invalid refresh token: %w", err)
 	}
 	if time.Now().UTC().After(t.ExpireAt) {
 		return "", fmt.Errorf("refresh token is expired")

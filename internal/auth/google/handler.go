@@ -15,7 +15,7 @@ func NewHandler(serv *Service) *Handler {
 
 func (h *Handler) LoginGoogle(c *gin.Context) {
 	state, url := h.serv.StartGoogleAuth()
-	c.SetCookie("state", state, 2*60, "/", "", false, true)
+	c.SetCookie("state", state, 3*60, "/", "", false, true)
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
