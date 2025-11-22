@@ -26,10 +26,10 @@ type Service struct {
 func NewService(
 	oauth *GoogleOAuth, 
 	jwt *auth.JWTManager, 
-	repo *user.Repository, 
+	userRepo *user.Repository, 
 	authRepo *auth.Repository, 
 	dbPool *pgxpool.Pool, ) *Service {
-	return &Service{oauth, jwt, repo, authRepo, dbPool}
+	return &Service{oauth, jwt, userRepo, authRepo, dbPool}
 }
 
 
@@ -163,7 +163,7 @@ func (s *Service) HandleGoogleCallback(
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
 	}
-	
+
 	refTokenCookieBytes, err :=  base64.RawURLEncoding.DecodeString(refTokenCookie)
 	if err != nil {
 		return auth.GoogleCallbackResp{}, err
@@ -185,4 +185,55 @@ func (s *Service) HandleGoogleCallback(
 		AccessToken: accToken,
 		RefreshToken: base64.RawURLEncoding.EncodeToString(refTokenBytes),
 	}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, refToken string) (string, error) {
+	refTokenBytes, err :=  base64.RawURLEncoding.DecodeString(refToken)
+	if err != nil {
+		return "", err
+	}
+
+	refTokenHash := auth.HashBytes(refTokenBytes)
+	refTokenHashStr := base64.RawURLEncoding.EncodeToString(refTokenHash)
+	t, err := s.authRepo.GetRefToken(ctx, refTokenHashStr)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("invalid refresh token: %w", err)
+		}
+		return "", err
+	}
+	if time.Now().UTC().After(t.ExpireAt) {
+		return "", fmt.Errorf("refresh token is expired")
+	}
+
+	user, err := s.userRepo.GetByID(ctx, t.UserID)
+	if err != nil {
+		return "", fmt.Errorf("invalid refresh token: %w", err)
+	}
+	
+	accToken, err := s.jwt.Generate(user)
+	if err != nil {
+		return "", fmt.Errorf("failed to create access token: %w", err)
+	}
+
+	if err = s.authRepo.RefreshTokenTime(ctx, refTokenHashStr); err != nil {
+		return "", fmt.Errorf("failed to update refresh token: %w", err)
+	}
+
+	return accToken, err
+}
+
+func (s *Service) Logout(ctx context.Context, refTokenCookie string) error {
+	refTokenBytes, err :=  base64.RawURLEncoding.DecodeString(refTokenCookie)
+	if err != nil {
+		return err
+	}
+
+	refTokenHash := auth.HashBytes(refTokenBytes)
+	refTokenHashStr := base64.RawURLEncoding.EncodeToString(refTokenHash)
+	err = s.authRepo.DeleteRefTokenByHash(ctx, refTokenHashStr)
+	if err != nil {
+		return err
+	}
+	return nil
 }

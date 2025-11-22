@@ -42,6 +42,18 @@ func (r *Repository) GetRefToken(ctx context.Context, tokenHash string) (*Refres
 	return &refToken, nil
 }
 
+func (r *Repository) RefreshTokenTime(ctx context.Context, tokenHash string) error {
+	query := `
+	UPDATE auth_providers
+	SET created_at = NOW(),
+		expire_at = NOW() + INTERVAL '30 days' 
+	WHERE refresh_token_hash = $1
+	`
+
+	_, err := r.db.Exec(ctx, query, tokenHash)
+	return err
+}
+
 func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToken) (uuid.UUID, error) {
 	query := `
 	INSERT INTO refresh_tokens (user_id, refresh_token_hash, user_agent, ip, expire_at, created_at)
@@ -66,12 +78,12 @@ func (r *Repository) CreateRefToken(ctx context.Context, token CreateRefreshToke
 	return id, nil
 }
 
-func (r *Repository) DeleteRefToken(ctx context.Context, session_id int) error {
+func (r *Repository) DeleteRefTokenByHash(ctx context.Context, refreshTokenHash string) error {
 	query := `
 	DELETE FROM refresh_tokens
-	WHERE session_id = $1
+	WHERE refresh_token_hash = $1
 	`
-	_, err := r.db.Exec(ctx, query, session_id)
+	_, err := r.db.Exec(ctx, query, refreshTokenHash)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,2 @@
+ALTER TABLE auth_providers
+ALTER COLUMN created_at TYPE TIMESTAMPTZ;

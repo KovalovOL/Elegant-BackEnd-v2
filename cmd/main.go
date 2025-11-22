@@ -43,13 +43,14 @@ func main() {
 	router.POST("/users", userHandler.Create)
 
 	router.GET("/auth/google/login", authHandler.LoginGoogle)
-	router.GET("/auth/logout", authHandler.Logout)
 	router.GET("/auth/google/callback", authHandler.GoogleCallback)
+	router.POST("/auth/logout", authHandler.Logout)
+	router.POST("/auth/refresh", authHandler.Refresh)
 
 	protected := router.Group("/")
 	protected.Use(auth.AuthMiddleware(jwtManager))
 	{
-		protected.GET("/me", authHandler.Me)
+		protected.GET("/auth/me", authHandler.Me)
 	}
 	router.Run(":8080")
 }
